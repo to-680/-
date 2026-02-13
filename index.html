@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>課題締切・作業量可視化アプリ</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f4f6f9;
+      text-align: center;
+    }
+
+    h1 {
+      margin-top: 20px;
+    }
+
+    .input-area {
+      margin: 20px;
+    }
+
+    input, button, select {
+      padding: 5px;
+      margin: 5px;
+    }
+
+    #calendar {
+      width: 90%;
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+    }
+
+    .day {
+      background: white;
+      border-radius: 8px;
+      min-height: 100px;
+      padding: 5px;
+      font-size: 12px;
+      position: relative;
+      border: 1px solid #ddd;
+    }
+
+    .date-number {
+      font-weight: bold;
+    }
+
+    .task {
+      margin-top: 3px;
+      padding: 2px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: white;
+    }
+
+    .urgent {
+      background: red !important;
+    }
+
+    .result-box {
+      margin-top: 20px;
+      background: white;
+      display: inline-block;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+
+<h1>📅 課題締切・作業量可視化アプリ</h1>
+
+<div class="input-area">
+  <input type="text" id="taskName" placeholder="課題名">
+  <input type="date" id="deadline">
+  <input type="number" id="totalHours" placeholder="必要時間（時間）">
+  <button onclick="addTask()">追加</button>
+</div>
+
+<div>
+  <select id="deleteSelect"></select>
+  <button onclick="deleteTask()">削除</button>
+</div>
+
+<div class="result-box" id="result"></div>
+
+<h2 id="monthTitle"></h2>
+<div id="calendar"></div>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+
+function saveTasks() {
+  localStorage.setItem("tasks", JSON.stringify(tasks));
+}
+
+function addTask() {
+  const taskName = document.getElementById("taskName").value;
+  const deadline = document.getElementById("deadline").value;
+  const totalHours = parseFloat(document.getElementById("totalHours").value);
+
+  if (!taskName || !deadline || !totalHours) {
+    alert("すべて入力してください");
+    return;
+  }
+
+  const today = new Date();
+  const end = new Date(deadline);
+  const remainingDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+
+  if (remainingDays <= 0) {
+    alert("締切日が過ぎています");
+    return;
+  }
+
+  const hoursPerDay = (totalHours / remainingDays).toFixed(2);
+
+  const colors = ["#4CAF50", "#2196F3", "#9C27B0", "#FF9800"];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+
+  tasks.push({ taskName, deadline, totalHours, color });
+  saveTasks();
+
+  document.getElementById("result").innerHTML = `
+    📌 課題名：${taskName}<br>
+    ⏰ 残り日数：${remainingDays}日<br>
+    💻 1日あたり必要作業時間：${hoursPerDay}時間<br><br>
+    ${hoursPerDay > 3 ? "🔥 かなりハードです" : "🙂 現実的なペースです"}
+  `;
+
+  renderCalendar();
+  updateDeleteSelect();
+}
+
+function deleteTask() {
+  const select = document.getElementById("deleteSelect");
+  const index = select.value;
+  tasks.splice(index, 1);
+  saveTasks();
+  renderCalendar();
+  updateDeleteSelect();
+}
+
+function updateDeleteSelect() {
+  const select = document.getElementById("deleteSelect");
+  select.innerHTML = "";
+  tasks.forEach((task, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    option.textContent = task.taskName;
+    select.appendChild(option);
+  });
+}
+
+function renderCalendar() {
+  const calendar = document.getElementById("calendar");
+  calendar.innerHTML = "";
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  document.getElementById("monthTitle").textContent =
+    `${year}年 ${month + 1}月`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < firstDay; i++) {
+    const blank = document.createElement("div");
+    calendar.appendChild(blank);
+  }
+
+  for (let date = 1; date <= lastDate; date++) {
+    const dayDiv = document.createElement("div");
+    dayDiv.classList.add("day");
+
+    const dateNumber = document.createElement("div");
+    dateNumber.classList.add("date-number");
+    dateNumber.textContent = date;
+    dayDiv.appendChild(dateNumber);
+
+    const currentDate = new Date(year, month, date);
+    const dateStr = currentDate.toISOString().split("T")[0];
+
+    let totalHours = 0;
+
+    tasks.forEach(task => {
+      if (task.deadline === dateStr) {
+        const taskDiv = document.createElement("div");
+        taskDiv.classList.add("task");
+        taskDiv.style.background = task.color;
+        taskDiv.textContent = task.taskName;
+
+        const remainingDays = Math.ceil(
+          (new Date(task.deadline) - new Date()) / (1000*60*60*24)
+        );
+
+        if (remainingDays <= 3) {
+          taskDiv.classList.add("urgent");
+        }
+
+        dayDiv.appendChild(taskDiv);
+      }
+
+      if (task.deadline === dateStr) {
+        totalHours += parseFloat(task.totalHours);
+      }
+    });
+
+    if (totalHours > 0) {
+      const totalDiv = document.createElement("div");
+      totalDiv.style.marginTop = "5px";
+      totalDiv.innerHTML = `合計：${totalHours}時間`;
+      dayDiv.appendChild(totalDiv);
+    }
+
+    calendar.appendChild(dayDiv);
+  }
+}
+
+renderCalendar();
+updateDeleteSelect();
+</script>
+
+</body>
+</html>
